@@ -205,3 +205,26 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Project-specific generated files
+sample_data/output*.json
+*.output.json
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# IDE - Visual Studio Code
+.vscode/
+
+# IDE - PyCharm/IntelliJ
+.idea/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
