@@ -30,27 +30,66 @@ def read_claims_csv(file_path: str) -> Iterator[Claim]:
         _validate_headers(reader.fieldnames)
 
         for row_number, row in enumerate(reader, start=2):
-            try:
-                yield _parse_row(row)
-            except Exception as exc:
-                raise ValueError(
-                    f"Error parsing row {row_number}: {exc}"
-                ) from exc
+            yield _parse_row(row)
 
 def _parse_row(row: dict) -> Claim:
+    """Parse a CSV row into a Claim object, handling missing values gracefully."""
+    # Get values with defaults for missing keys, strip whitespace
+    claim_id = row.get("claim_id", "").strip()
+    member_id = row.get("member_id", "").strip() or None
+    ndc = row.get("ndc", "").strip() or None
+    date_of_service = _parse_date(row.get("date_of_service", "").strip())
+    quantity = _parse_int(row.get("quantity", "").strip())
+    days_supply = _parse_int(row.get("days_supply", "").strip())
+    drug_cost = _parse_decimal(row.get("drug_cost", "").strip())
+    plan_type = _parse_plan_type(row.get("plan_type", "").strip())
+    
     return Claim(
-        claim_id=row["claim_id"].strip(),
-        member_id=row["member_id"].strip(),
-        ndc=row["ndc"].strip(),
-        date_of_service=_parse_date(row["date_of_service"]),
-        quantity=int(row["quantity"]),
-        days_supply=int(row["days_supply"]),
-        drug_cost=Decimal(row["drug_cost"]),
-        plan_type=PlanType(row["plan_type"].lower()),
+        claim_id=claim_id,
+        member_id=member_id,
+        ndc=ndc,
+        date_of_service=date_of_service,
+        quantity=quantity,
+        days_supply=days_supply,
+        drug_cost=drug_cost,
+        plan_type=plan_type,
     )
 
-def _parse_date(value: str) -> date:
-    return datetime.strptime(value, "%Y-%m-%d").date()
+def _parse_date(value: str) -> Optional[date]:
+    """Parse a date string, returning None if empty or invalid."""
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+def _parse_int(value: str) -> Optional[int]:
+    """Parse an integer string, returning None if empty or invalid."""
+    if not value:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+def _parse_decimal(value: str) -> Optional[Decimal]:
+    """Parse a decimal string, returning None if empty or invalid."""
+    if not value:
+        return None
+    try:
+        return Decimal(value)
+    except (ValueError, TypeError):
+        return None
+
+def _parse_plan_type(value: str) -> Optional[PlanType]:
+    """Parse a plan type string, returning None if empty or invalid."""
+    if not value:
+        return None
+    try:
+        return PlanType(value.lower().strip())
+    except ValueError:
+        return None
 
 
 def _validate_headers(headers: Optional[List[str]]) -> None:

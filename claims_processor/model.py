@@ -15,13 +15,13 @@ class Claim:
     """Data class representing a raw claim."""
     
     claim_id: str  # Unique identifier
-    member_id: str  # 10 digits
-    ndc: str  # 11-digit National Drug Code
-    date_of_service: date  # YYYY-MM-DD
-    quantity: int  # Pills dispensed
-    days_supply: int  # Days medication should last
-    drug_cost: Decimal  # Wholesale cost
-    plan_type: PlanType  # Plan type enum
+    member_id: Optional[str] = None  # 10 digits
+    ndc: Optional[str] = None  # 11-digit National Drug Code
+    date_of_service: Optional[date] = None  # YYYY-MM-DD
+    quantity: Optional[int] = None  # Pills dispensed
+    days_supply: Optional[int] = None  # Days medication should last
+    drug_cost: Optional[Decimal] = None  # Wholesale cost
+    plan_type: Optional[PlanType] = None  # Plan type enum
     
 
 @dataclass(frozen=True)

@@ -23,11 +23,18 @@ def process_claim(claim: Claim) -> ProcessedClaim:
     if errors:
         return _reject(claim, "; ".join(errors))
 
+    # Additional defensive checks to help type checker with static validations(validation should have caught these)
+    if claim.quantity is None or claim.days_supply is None:
+        return _reject(claim, "quantity and days_supply are required")
+
     # Reject if too many pills per day
     if claim.quantity / claim.days_supply > MAX_PILLS_PER_DAY:
         return _reject(claim, "Too many pills per day")
 
-    # Calculate copay
+    # Additional defensive checks to help type checker with static validations(validation should have caught these)
+    if claim.plan_type is None or claim.drug_cost is None:
+        return _reject(claim, "plan_type and drug_cost are required")
+    
     copay: Optional[Decimal] = calculate_copay(claim)
 
     return ProcessedClaim(
