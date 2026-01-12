@@ -17,16 +17,15 @@ def normalize_11_to_fda_product_ndc(ndc_11: str) -> str:
     Example:
         08328600301 -> 83286-003
     """
-    # if not ndc_11.isdigit() or len(ndc_11) != 11:
-    #     raise ValueError("NDC must be exactly 11 digits")
 
-    ndc = ndc_11.lstrip("0")
-
-    # if len(ndc) != 10 or not ndc.isdigit():
-    #     raise ValueError("Invalid normalized NDC")
-
+    # Strip ONLY the first leading zero
+    if ndc_11.startswith("0"):
+        ndc = ndc_11[1:]
+    else:
+        ndc = ndc_11
+    # no need to test for length, slicing is forgiving
     labeler = ndc[:5]
-    product = ndc[5:8]     # already correct length
+    product = ndc[5:8]
 
     return f"{labeler}-{product}"
 
