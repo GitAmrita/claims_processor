@@ -12,13 +12,34 @@ OPENFDA_NDC_URL = "https://api.fda.gov/drug/ndc.json"
 TIMEOUT_SECONDS = 5  # seconds
 
 def normalize_11_to_fda_product_ndc(ndc_11: str) -> str:
+
     """
-    Convert 11-digit NDC (claims format) to FDA product_ndc (labeler-product).
-    Example:
-        08328600301 -> 83286-003
+    Normalize an 11-digit pharmacy claim NDC to the FDA `product_ndc` format
+    (labeler-product).
+
+    Assumption / Simplification (Intentional for this implementation):
+    -------------------------------------------------
+    This logic assumes the incoming NDC is already in the standardized
+    5-4-2 claims format where ONLY the labeler segment is left-padded
+    with a leading zero.
+        Example handled here:
+            08328600301  →  83286-003
+    Under this assumption, we detect and remove a single leading zero
+    from the full NDC string and then slice fixed positions.
+
+    Real-world Note:
+    ----------------
+    In real pharmacy data, 11-digit NDCs may originate from multiple
+    FDA formats (4-4-2, 5-3-2, or 5-4-1) and be padded at different
+    segment levels (labeler, product, or package).
+
+    A fully robust implementation would:
+      • Identify which segment is padded
+      • Preserve fixed 5-4-2 positional slicing
+      • Normalize each segment independently
     """
 
-    # Strip ONLY the first leading zero
+    # labeler padded , remove leading 0
     if ndc_11.startswith("0"):
         ndc = ndc_11[1:]
     else:
