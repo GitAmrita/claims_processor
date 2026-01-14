@@ -10,8 +10,6 @@ from .enums import PlanType, Status
 
 @dataclass(frozen=True)
 class Claim:
-
-
     """Data class representing a raw claim."""
     
     claim_id: str  # Unique identifier
@@ -26,7 +24,6 @@ class Claim:
 
 @dataclass(frozen=True)
 class ProcessedClaim:
-
     """Data class representing a processed claim."""
     
     claim_id: str
@@ -34,3 +31,15 @@ class ProcessedClaim:
     copay_amount: Optional[Decimal]
     rejection_reason: Optional[str]
     processed_at: datetime
+
+
+@dataclass(frozen=True)
+class ProcessingSummary:
+    """Data class representing processing summary statistics."""
+    
+    total_rows_processed: int
+    total_approved: int
+    total_rejected: int
+    percentage_approved: float
+    percentage_rejected: float
+    processing_time_seconds: float

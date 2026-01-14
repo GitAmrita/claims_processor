@@ -1,7 +1,9 @@
 import csv
+import json
 from typing import Iterator, List, Optional
 
-from .model import Claim, ProcessedClaim
+from .model import Claim, ProcessedClaim, ProcessingSummary
+from .enums import Status
 from .utils import parse_date, parse_int, parse_decimal, parse_plan_type
 
 
@@ -81,12 +83,79 @@ def write_processed_claims(
     claims: List[ProcessedClaim],
     output_path: str,
 ) -> None:
-    import json
-
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(
             [serialize_processed_claim(c) for c in claims],
             f,
             indent=2,
         )
+
+
+def compute_processing_summary(
+    claims: List[ProcessedClaim],
+    processing_time_seconds: float,
+) -> ProcessingSummary:
+    """
+    Compute processing summary statistics from processed claims.
+    
+    Args:
+        claims: List of processed claims
+        processing_time_seconds: Time taken to process all claims
+    
+    Returns:
+        ProcessingSummary object with computed statistics
+    """
+    total_processed = len(claims)
+    total_approved = sum(1 for claim in claims if claim.status == Status.APPROVED)
+    total_rejected = sum(1 for claim in claims if claim.status == Status.REJECT)
+
+    # Calculate percentages, handling division by zero
+    percentage_approved = (
+        round((total_approved / total_processed * 100), 2) if total_processed > 0 else 0.0
+    )
+    percentage_rejected = (
+        round((total_rejected / total_processed * 100), 2) if total_processed > 0 else 0.0
+    )
+
+    return ProcessingSummary(
+        total_rows_processed=total_processed,
+        total_approved=total_approved,
+        total_rejected=total_rejected,
+        percentage_approved=percentage_approved,
+        percentage_rejected=percentage_rejected,
+        processing_time_seconds=round(processing_time_seconds, 2),
+    )
+
+
+def serialize_processing_summary(summary: ProcessingSummary) -> dict:
+    """
+    Convert ProcessingSummary domain object to JSON-serializable dict.
+    """
+    return {
+        "total_rows_processed": summary.total_rows_processed,
+        "total_approved": summary.total_approved,
+        "total_rejected": summary.total_rejected,
+        "percentage_approved": summary.percentage_approved,
+        "percentage_rejected": summary.percentage_rejected,
+        "processing_time_seconds": summary.processing_time_seconds,
+    }
+
+
+def write_processing_summary(
+    claims: List[ProcessedClaim],
+    summary_path: str,
+    processing_time_seconds: float,
+) -> None:
+    """
+    Compute and write processing summary statistics to a JSON file.
+    
+    Args:
+        claims: List of processed claims
+        summary_path: Path to write the summary JSON file
+        processing_time_seconds: Time taken to process all claims
+    """
+    summary = compute_processing_summary(claims, processing_time_seconds)
+
+    with open(summary_path, "w", encoding="utf-8") as f:
+        json.dump(serialize_processing_summary(summary), f, indent=2)
 
