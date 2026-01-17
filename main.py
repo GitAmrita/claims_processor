@@ -7,7 +7,7 @@ from claims_processor.io import (
 )
 
 # Input CSV and output JSON paths
-INPUT_FILE = Path("sample_data/input_claims.csv")
+INPUT_FILE = Path("sample_data/big_input_claims.csv")
 OUTPUT_FILE = Path("sample_data/output_claims.json")
 SUMMARY_FILE = Path("sample_data/output_summary.json")
 
@@ -21,6 +21,7 @@ def main() -> None:
     
     # Process claims in parallel with async NDC validation
     # Uses ProcessPoolExecutor for CPU-bound work and async HTTP for NDC validation
+    # use_parallel parameter defaults to config value if not provided
     processed_claims = process_claims_parallel(
         str(INPUT_FILE),
         num_workers=None,  # Uses CPU count by default

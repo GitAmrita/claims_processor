@@ -11,6 +11,8 @@ from claims_processor.enums import PlanType, Status
 from claims_processor.processor import process_claim, _reject, MAX_PILLS_PER_DAY
 
 
+# Patch config to ensure tests are independent of config values
+@patch("claims_processor.processor.VALIDATE_NDC_ONLINE", True)
 class TestProcessClaim:
     """Test cases for process_claim function."""
 

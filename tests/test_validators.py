@@ -11,6 +11,8 @@ from claims_processor.enums import PlanType
 from claims_processor.validators import _validate_format_and_values, _validate_required_fields, validate_claim, normalize_11_to_fda_product_ndc
 
 
+# Patch config to ensure tests are independent of config values
+@patch("claims_processor.validators.VALIDATE_NDC_ONLINE", True)
 class TestValidate:
     """Test cases for _validate_format_and_values function."""
 

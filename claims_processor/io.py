@@ -1,12 +1,16 @@
 import csv
 import json
 import asyncio
+import multiprocessing
 from typing import Iterator, List, Optional, Tuple
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from .model import Claim, ProcessedClaim, ProcessingSummary
 from .enums import Status
+from .processor import process_claim
 from .utils import parse_date, parse_int, parse_decimal, parse_plan_type
+from .validators import validate_ndcs_batch_async
+from .config import USE_PARALLEL
 
 
 REQUIRED_COLUMNS = {
@@ -97,10 +101,7 @@ def serialize_processed_claim(claim: ProcessedClaim) -> dict:
         "processed_at": claim.processed_at.isoformat(),
     }
 
-def write_processed_claims(
-    claims: List[ProcessedClaim],
-    output_path: str,
-) -> None:
+def write_processed_claims(claims: List[ProcessedClaim], output_path: str) -> None:
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(
             [serialize_processed_claim(c) for c in claims],
@@ -108,11 +109,7 @@ def write_processed_claims(
             indent=2,
         )
 
-
-def compute_processing_summary(
-    claims: List[ProcessedClaim],
-    processing_time_seconds: float,
-) -> ProcessingSummary:
+def compute_processing_summary(claims: List[ProcessedClaim], processing_time_seconds: float) -> ProcessingSummary:
     """
     Compute processing summary statistics from processed claims.
     
@@ -144,7 +141,6 @@ def compute_processing_summary(
         processing_time_seconds=round(processing_time_seconds, 2),
     )
 
-
 def serialize_processing_summary(summary: ProcessingSummary) -> dict:
     """
     Convert ProcessingSummary domain object to JSON-serializable dict.
@@ -158,12 +154,7 @@ def serialize_processing_summary(summary: ProcessingSummary) -> dict:
         "processing_time_seconds": summary.processing_time_seconds,
     }
 
-
-def write_processing_summary(
-    claims: List[ProcessedClaim],
-    summary_path: str,
-    processing_time_seconds: float,
-) -> None:
+def write_processing_summary(claims: List[ProcessedClaim], summary_path: str, processing_time_seconds: float) -> None:
     """
     Compute and write processing summary statistics to a JSON file.
     
@@ -176,7 +167,6 @@ def write_processing_summary(
 
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(serialize_processing_summary(summary), f, indent=2)
-
 
 def _process_chunk_with_ndc_cache(claims_chunk: List[Claim]) -> List[ProcessedClaim]:
     """
@@ -195,9 +185,6 @@ def _process_chunk_with_ndc_cache(claims_chunk: List[Claim]) -> List[ProcessedCl
     Returns:
         List of ProcessedClaim objects
     """
-    from .processor import process_claim
-    from .validators import validate_ndcs_batch_async
-    
     # Extract unique NDCs that need validation
     ndcs_to_validate = {claim.ndc for claim in claims_chunk if claim.ndc}
     
@@ -216,12 +203,7 @@ def _process_chunk_with_ndc_cache(claims_chunk: List[Claim]) -> List[ProcessedCl
     
     return processed_claims
 
-
-def process_claims_parallel(
-    file_path: str,
-    num_workers: Optional[int] = None,
-    chunk_size: int = 1000,
-) -> List[ProcessedClaim]:
+def process_claims_parallel(file_path: str, num_workers: Optional[int] = None, chunk_size: int = 1000, use_parallel: bool = USE_PARALLEL) -> List[ProcessedClaim]:
     """
     Process claims in parallel using multiprocessing with async NDC validation.
     
@@ -229,17 +211,26 @@ def process_claims_parallel(
         file_path: Path to CSV file
         num_workers: Number of worker processes (defaults to CPU count)
         chunk_size: Number of claims per chunk
+        use_parallel: Whether to use parallel processing (defaults to config value)
         
     Returns:
         List of ProcessedClaim objects
     """
-    import multiprocessing
+    all_processed_claims = []
     
+    # Sequential processing for debugging
+    if not use_parallel:
+        print("DEBUG MODE: Processing chunks sequentially...")
+        for chunk in read_claims_csv_chunks(file_path, chunk_size):
+            print(f"Processing chunk of {len(chunk)} claims...")
+            processed_chunk = _process_chunk_with_ndc_cache(chunk)
+            all_processed_claims.extend(processed_chunk)
+        return all_processed_claims
+    
+    # Parallel processing
     if num_workers is None:
         num_workers = multiprocessing.cpu_count()
         print(f"Using {num_workers} worker processes")
-    
-    all_processed_claims = []
     
     # Process chunks in parallel
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
@@ -257,7 +248,7 @@ def process_claims_parallel(
             except Exception as exc:
                 chunk = future_to_chunk[future]
                 print(f"Chunk processing failed: {exc}")
-                # Optionally: process chunk synchronously as fallback
+                # [todo] Optionally: process chunk synchronously as fallback
                 raise
     
     return all_processed_claims

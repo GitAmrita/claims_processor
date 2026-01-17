@@ -6,11 +6,12 @@ from .model import Claim, ProcessedClaim
 from .enums import Status
 from .validators import validate_claim
 from .copay import calculate_copay  # per plan type
+from .config import VALIDATE_NDC_ONLINE
 
 MAX_PILLS_PER_DAY = 3  # business rule
 
 
-def process_claim(claim: Claim, ndc_cache: Optional[Dict[str, bool]] = None) -> ProcessedClaim:
+def process_claim(claim: Claim, ndc_cache: Optional[Dict[str, bool]] = None, validate_ndc_online: bool = VALIDATE_NDC_ONLINE) -> ProcessedClaim:
     """
     Process a single Claim:
     - Validate
@@ -20,8 +21,9 @@ def process_claim(claim: Claim, ndc_cache: Optional[Dict[str, bool]] = None) -> 
     Args:
         claim: Claim to process
         ndc_cache: Optional dict mapping NDC -> bool for cached validation results
+        validate_ndc_online: Whether to validate NDC online (defaults to config value)
     """
-    errors = validate_claim(claim, validate_ndc_online=True, ndc_cache=ndc_cache)
+    errors = validate_claim(claim, validate_ndc_online=validate_ndc_online, ndc_cache=ndc_cache)
 
     # Reject if validation fails
     if errors:

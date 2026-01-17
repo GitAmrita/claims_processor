@@ -1,10 +1,10 @@
 from datetime import date, datetime
 from typing import List, Dict, Set
 import logging
-from functools import lru_cache
-import requests
 import asyncio
 import aiohttp
+
+from .config import VALIDATE_NDC_ONLINE
 
 from .model import Claim
 
@@ -124,14 +124,14 @@ def _validate_format_and_values(claim: Claim, validate_ndc_online: bool, ndc_cac
     return errors
 
 
-def validate_claim(claim: Claim, validate_ndc_online: bool = True, ndc_cache: Dict[str, bool] = None) -> List[str]:
+def validate_claim(claim: Claim, validate_ndc_online: bool = VALIDATE_NDC_ONLINE, ndc_cache: Dict[str, bool] = None) -> List[str]:
     """
     Validate a Claim object.
     Returns a list of error messages. Empty list = valid claim.
     
     Args:
         claim: Claim to validate
-        validate_ndc_online: Whether to validate NDC online
+        validate_ndc_online: Whether to validate NDC online (defaults to config value)
         ndc_cache: Optional dict mapping NDC -> bool for cached validation results
     """
     errors: List[str] = []
