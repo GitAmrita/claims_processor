@@ -7,7 +7,7 @@ from claims_processor.io import (
 )
 
 # Input CSV and output JSON paths
-INPUT_FILE = Path("sample_data/big_input_claims.csv")
+INPUT_FILE = Path("sample_data/input_claims.csv")
 OUTPUT_FILE = Path("sample_data/output_claims.json")
 SUMMARY_FILE = Path("sample_data/output_summary.json")
 
