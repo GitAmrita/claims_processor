@@ -18,14 +18,12 @@ def main() -> None:
     Uses parallel processing with async NDC validation for optimal performance.
     """
     start_time = time.time()
-    
     # Process claims in parallel with async NDC validation
     # Uses ProcessPoolExecutor for CPU-bound work and async HTTP for NDC validation
-    # use_parallel parameter defaults to config value if not provided
+    # use_parallel and chunk_size parameters default to config values if not provided
     processed_claims = process_claims_parallel(
         str(INPUT_FILE),
         num_workers=None,  # Uses CPU count by default
-        chunk_size=1000,   # Process 1000 claims per chunk
     )
 
     # Write processed claims to JSON

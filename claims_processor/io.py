@@ -10,7 +10,7 @@ from .enums import Status
 from .processor import process_claim
 from .utils import parse_date, parse_int, parse_decimal, parse_plan_type
 from .validators import validate_ndcs_batch_async
-from .config import USE_PARALLEL
+from .config import USE_PARALLEL, CHUNK_SIZE
 
 
 REQUIRED_COLUMNS = {
@@ -25,7 +25,7 @@ REQUIRED_COLUMNS = {
 }
 
 
-def read_claims_csv_chunks(file_path: str, chunk_size: int = 1000) -> Iterator[List[Claim]]:
+def read_claims_csv_chunks(file_path: str, chunk_size: int = CHUNK_SIZE) -> Iterator[List[Claim]]:
     """
     Read CSV file in chunks for parallel processing.
     
@@ -203,7 +203,7 @@ def _process_chunk_with_ndc_cache(claims_chunk: List[Claim]) -> List[ProcessedCl
     
     return processed_claims
 
-def process_claims_parallel(file_path: str, num_workers: Optional[int] = None, chunk_size: int = 1000, use_parallel: bool = USE_PARALLEL) -> List[ProcessedClaim]:
+def process_claims_parallel(file_path: str, num_workers: Optional[int] = None, chunk_size: int = CHUNK_SIZE, use_parallel: bool = USE_PARALLEL) -> List[ProcessedClaim]:
     """
     Process claims in parallel using multiprocessing with async NDC validation.
     
@@ -241,6 +241,7 @@ def process_claims_parallel(file_path: str, num_workers: Optional[int] = None, c
             future_to_chunk[future] = chunk
         
         # Collect results as they complete
+        failed_chunks = []
         for future in as_completed(future_to_chunk):
             try:
                 processed_chunk = future.result()
@@ -248,8 +249,12 @@ def process_claims_parallel(file_path: str, num_workers: Optional[int] = None, c
             except Exception as exc:
                 chunk = future_to_chunk[future]
                 print(f"Chunk processing failed: {exc}")
-                # [todo] Optionally: process chunk synchronously as fallback
-                raise
+                failed_chunks.append((chunk, exc))
+        
+        # Report any failures
+        if failed_chunks:
+            print(f"Warning: {len(failed_chunks)} chunk(s) failed to process")
+            # Optionally: process failed chunks synchronously as fallback
     
     return all_processed_claims
 
