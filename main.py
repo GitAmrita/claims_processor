@@ -1,7 +1,10 @@
 import time
 from pathlib import Path
-from claims_processor.io import read_claims_csv, write_processed_claims, write_processing_summary
-from claims_processor.processor import process_claim
+from claims_processor.io import (
+    process_claims_parallel,
+    write_processed_claims,
+    write_processing_summary,
+)
 
 # Input CSV and output JSON paths
 INPUT_FILE = Path("sample_data/input_claims.csv")
@@ -12,15 +15,17 @@ SUMMARY_FILE = Path("sample_data/output_summary.json")
 def main() -> None:
     """
     Test run for the claims processor.
-    Reads CSV → processes each claim → writes JSON output.
+    Uses parallel processing with async NDC validation for optimal performance.
     """
     start_time = time.time()
-    processed_claims = []
-
-    # Memory-safe streaming read
-    for claim in read_claims_csv(INPUT_FILE):
-        result = process_claim(claim)
-        processed_claims.append(result)
+    
+    # Process claims in parallel with async NDC validation
+    # Uses ProcessPoolExecutor for CPU-bound work and async HTTP for NDC validation
+    processed_claims = process_claims_parallel(
+        str(INPUT_FILE),
+        num_workers=None,  # Uses CPU count by default
+        chunk_size=1000,   # Process 1000 claims per chunk
+    )
 
     # Write processed claims to JSON
     write_processed_claims(processed_claims, OUTPUT_FILE)
@@ -32,6 +37,7 @@ def main() -> None:
     write_processing_summary(processed_claims, SUMMARY_FILE, elapsed_time)
 
     # Print results
+    print(f"Processed {len(processed_claims)} claims in {elapsed_time:.2f} seconds")
     print(f"Output file written to {OUTPUT_FILE}")
     print(f"Summary file written to {SUMMARY_FILE}")
 

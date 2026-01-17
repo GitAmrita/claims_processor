@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, Dict
 
 from .model import Claim, ProcessedClaim
 from .enums import Status
@@ -10,14 +10,18 @@ from .copay import calculate_copay  # per plan type
 MAX_PILLS_PER_DAY = 3  # business rule
 
 
-def process_claim(claim: Claim) -> ProcessedClaim:
+def process_claim(claim: Claim, ndc_cache: Optional[Dict[str, bool]] = None) -> ProcessedClaim:
     """
     Process a single Claim:
     - Validate
     - Apply rejection rules
     - Calculate copay if approved
+    
+    Args:
+        claim: Claim to process
+        ndc_cache: Optional dict mapping NDC -> bool for cached validation results
     """
-    errors = validate_claim(claim)
+    errors = validate_claim(claim, validate_ndc_online=True, ndc_cache=ndc_cache)
 
     # Reject if validation fails
     if errors:

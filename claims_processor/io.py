@@ -1,6 +1,8 @@
 import csv
 import json
-from typing import Iterator, List, Optional
+import asyncio
+from typing import Iterator, List, Optional, Tuple
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from .model import Claim, ProcessedClaim, ProcessingSummary
 from .enums import Status
@@ -19,18 +21,34 @@ REQUIRED_COLUMNS = {
 }
 
 
-def read_claims_csv(file_path: str) -> Iterator[Claim]:
+def read_claims_csv_chunks(file_path: str, chunk_size: int = 1000) -> Iterator[List[Claim]]:
     """
-    Memory-safe CSV reader.
-    Streams claims one row at a time without loading the full file into memory.
+    Read CSV file in chunks for parallel processing.
+    
+    Args:
+        file_path: Path to CSV file
+        chunk_size: Number of rows per chunk
+        
+    Yields:
+        Lists of Claim objects (chunks)
     """
+    chunk = []
     with open(file_path, newline="", encoding="utf-8") as csvfile:
         reader = csv.DictReader(csvfile)
-
+        
         _validate_headers(reader.fieldnames)
-
-        for row_number, row in enumerate(reader, start=2):
-            yield _parse_row(row)
+        
+        for row in reader:
+            claim = _parse_row(row)
+            chunk.append(claim)
+            
+            if len(chunk) >= chunk_size:
+                yield chunk
+                chunk = []
+        
+        # Yield remaining claims
+        if chunk:
+            yield chunk
 
 def _parse_row(row: dict) -> Claim:
     """Parse a CSV row into a Claim object, handling missing values gracefully."""
@@ -158,4 +176,89 @@ def write_processing_summary(
 
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(serialize_processing_summary(summary), f, indent=2)
+
+
+def _process_chunk_with_ndc_cache(claims_chunk: List[Claim]) -> List[ProcessedClaim]:
+    """
+    Process a chunk of claims with async NDC validation.
+    This function is designed to be called by worker processes.
+    
+    NDC validation is batched (all NDCs validated concurrently), but individual
+    claim processing happens serially within each chunk. This is optimal since:
+    - NDC validation was the bottleneck and is now batched
+    - Other processing (validation, copay calculation) is fast
+    - Chunks are already processed in parallel via ProcessPoolExecutor
+    
+    Args:
+        claims_chunk: List of Claim objects to process
+        
+    Returns:
+        List of ProcessedClaim objects
+    """
+    from .processor import process_claim
+    from .validators import validate_ndcs_batch_async
+    
+    # Extract unique NDCs that need validation
+    ndcs_to_validate = {claim.ndc for claim in claims_chunk if claim.ndc}
+    
+    # Validate NDCs asynchronously (batch validation - all NDCs concurrently)
+    if ndcs_to_validate:
+        ndc_cache = asyncio.run(validate_ndcs_batch_async(ndcs_to_validate))
+    else:
+        ndc_cache = {}
+    
+    # Process each claim serially using the NDC cache
+    # (Serial is fine here since NDC validation bottleneck is already batched)
+    processed_claims = []
+    for claim in claims_chunk:
+        result = process_claim(claim, ndc_cache=ndc_cache)
+        processed_claims.append(result)
+    
+    return processed_claims
+
+
+def process_claims_parallel(
+    file_path: str,
+    num_workers: Optional[int] = None,
+    chunk_size: int = 1000,
+) -> List[ProcessedClaim]:
+    """
+    Process claims in parallel using multiprocessing with async NDC validation.
+    
+    Args:
+        file_path: Path to CSV file
+        num_workers: Number of worker processes (defaults to CPU count)
+        chunk_size: Number of claims per chunk
+        
+    Returns:
+        List of ProcessedClaim objects
+    """
+    import multiprocessing
+    
+    if num_workers is None:
+        num_workers = multiprocessing.cpu_count()
+        print(f"Using {num_workers} worker processes")
+    
+    all_processed_claims = []
+    
+    # Process chunks in parallel
+    with ProcessPoolExecutor(max_workers=num_workers) as executor:
+        # Submit all chunks for processing
+        future_to_chunk = {}
+        for chunk in read_claims_csv_chunks(file_path, chunk_size):
+            future = executor.submit(_process_chunk_with_ndc_cache, chunk)
+            future_to_chunk[future] = chunk
+        
+        # Collect results as they complete
+        for future in as_completed(future_to_chunk):
+            try:
+                processed_chunk = future.result()
+                all_processed_claims.extend(processed_chunk)
+            except Exception as exc:
+                chunk = future_to_chunk[future]
+                print(f"Chunk processing failed: {exc}")
+                # Optionally: process chunk synchronously as fallback
+                raise
+    
+    return all_processed_claims
 

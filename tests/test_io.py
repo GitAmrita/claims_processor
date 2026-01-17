@@ -11,7 +11,7 @@ import pytest
 from claims_processor.enums import PlanType, Status
 from claims_processor.io import (
     compute_processing_summary,
-    read_claims_csv,
+    read_claims_csv_chunks,
     serialize_processed_claim,
     serialize_processing_summary,
     write_processed_claims,
@@ -20,8 +20,8 @@ from claims_processor.io import (
 from claims_processor.model import Claim, ProcessedClaim, ProcessingSummary
 
 
-class TestReadClaimsCsv:
-    """Test cases for read_claims_csv function."""
+class TestReadClaimsCsvChunks:
+    """Test cases for read_claims_csv_chunks function."""
 
     def test_read_valid_csv(self):
         """Test reading a valid CSV file with proper headers."""
@@ -34,7 +34,11 @@ class TestReadClaimsCsv:
             temp_path = f.name
 
         try:
-            claims = list(read_claims_csv(temp_path))
+            # Flatten chunks into a single list for testing
+            claims = []
+            for chunk in read_claims_csv_chunks(temp_path, chunk_size=1000):
+                claims.extend(chunk)
+            
             assert len(claims) == 2
             assert claims[0].claim_id == "CLM001"
             assert claims[0].member_id == "1234567890"
@@ -61,7 +65,11 @@ class TestReadClaimsCsv:
             temp_path = f.name
 
         try:
-            claims = list(read_claims_csv(temp_path))
+            # Flatten chunks into a single list for testing
+            claims = []
+            for chunk in read_claims_csv_chunks(temp_path, chunk_size=1000):
+                claims.extend(chunk)
+            
             assert len(claims) == 2
             assert claims[0].member_id is None
             assert claims[1].ndc is None
@@ -77,7 +85,8 @@ class TestReadClaimsCsv:
 
         try:
             with pytest.raises(ValueError, match="Missing required columns"):
-                list(read_claims_csv(temp_path))
+                # Force evaluation by converting to list
+                list(read_claims_csv_chunks(temp_path, chunk_size=1000))
         finally:
             Path(temp_path).unlink()
 
@@ -90,7 +99,11 @@ class TestReadClaimsCsv:
             temp_path = f.name
 
         try:
-            claims = list(read_claims_csv(temp_path))
+            # Flatten chunks into a single list for testing
+            claims = []
+            for chunk in read_claims_csv_chunks(temp_path, chunk_size=1000):
+                claims.extend(chunk)
+            
             assert len(claims) == 0
         finally:
             Path(temp_path).unlink()
@@ -105,7 +118,11 @@ class TestReadClaimsCsv:
             temp_path = f.name
 
         try:
-            claims = list(read_claims_csv(temp_path))
+            # Flatten chunks into a single list for testing
+            claims = []
+            for chunk in read_claims_csv_chunks(temp_path, chunk_size=1000):
+                claims.extend(chunk)
+            
             assert len(claims) == 1
             # Verify all fields with whitespace are properly stripped
             assert claims[0].claim_id == "CLM001"
@@ -116,6 +133,28 @@ class TestReadClaimsCsv:
             assert claims[0].days_supply == 30
             assert claims[0].drug_cost == Decimal("150.00")
             assert claims[0].plan_type == PlanType.COMMERCIAL
+        finally:
+            Path(temp_path).unlink()
+
+    def test_read_csv_chunks_respects_chunk_size(self):
+        """Test that read_claims_csv_chunks respects the chunk_size parameter."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
+            f.write(
+                "claim_id,member_id,ndc,date_of_service,quantity,days_supply,drug_cost,plan_type\n"
+            )
+            # Write 5 rows
+            for i in range(5):
+                f.write(f"CLM{i:03d},1234567890,08328600301,2025-10-15,30,30,150.00,commercial\n")
+            temp_path = f.name
+
+        try:
+            chunks = list(read_claims_csv_chunks(temp_path, chunk_size=2))
+            
+            # Should have 3 chunks: [2, 2, 1]
+            assert len(chunks) == 3
+            assert len(chunks[0]) == 2
+            assert len(chunks[1]) == 2
+            assert len(chunks[2]) == 1
         finally:
             Path(temp_path).unlink()
 

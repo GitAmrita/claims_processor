@@ -149,10 +149,8 @@ class TestValidate:
         errors = _validate_required_fields(claim)
         assert "ndc is required" in errors
 
-    @patch("claims_processor.validators.is_valid_ndc_online")
-    def test_ndc_online_validation_valid(self, mock_is_valid):
-        """Test that valid NDC passes online validation when enabled."""
-        mock_is_valid.return_value = True
+    def test_ndc_online_validation_valid(self):
+        """Test that valid NDC passes online validation when cache indicates valid."""
         claim = Claim(
             claim_id="CLM001",
             member_id="1234567890",
@@ -163,14 +161,13 @@ class TestValidate:
             drug_cost=Decimal("100.00"),
             plan_type=PlanType.COMMERCIAL,
         )
-        errors = _validate_format_and_values(claim, validate_ndc_online=True)
+        # Use ndc_cache to simulate valid NDC (parallel processing approach)
+        ndc_cache = {"12345678901": True}
+        errors = _validate_format_and_values(claim, validate_ndc_online=True, ndc_cache=ndc_cache)
         assert "ndc is not a valid FDA NDC" not in errors
-        mock_is_valid.assert_called_once_with("12345678901")
 
-    @patch("claims_processor.validators.is_valid_ndc_online")
-    def test_ndc_online_validation_invalid(self, mock_is_valid):
-        """Test that invalid NDC fails online validation when enabled."""
-        mock_is_valid.return_value = False
+    def test_ndc_online_validation_invalid(self):
+        """Test that invalid NDC fails online validation when cache indicates invalid."""
         claim = Claim(
             claim_id="CLM001",
             member_id="1234567890",
@@ -181,12 +178,12 @@ class TestValidate:
             drug_cost=Decimal("100.00"),
             plan_type=PlanType.COMMERCIAL,
         )
-        errors = _validate_format_and_values(claim, validate_ndc_online=True)
+        # Use ndc_cache to simulate invalid NDC (parallel processing approach)
+        ndc_cache = {"12345678901": False}
+        errors = _validate_format_and_values(claim, validate_ndc_online=True, ndc_cache=ndc_cache)
         assert "ndc is not a valid FDA NDC" in errors
-        mock_is_valid.assert_called_once_with("12345678901")
 
-    @patch("claims_processor.validators.is_valid_ndc_online")
-    def test_ndc_online_validation_disabled(self, mock_is_valid):
+    def test_ndc_online_validation_disabled(self):
         """Test that online validation is skipped when disabled."""
         claim = Claim(
             claim_id="CLM001",
@@ -200,7 +197,23 @@ class TestValidate:
         )
         errors = _validate_format_and_values(claim, validate_ndc_online=False)
         assert "ndc is not a valid FDA NDC" not in errors
-        mock_is_valid.assert_not_called()
+
+    def test_ndc_online_validation_missing_from_cache(self):
+        """Test that NDC missing from cache triggers error."""
+        claim = Claim(
+            claim_id="CLM001",
+            member_id="1234567890",
+            ndc="12345678901",
+            date_of_service=date.today() - timedelta(days=1),
+            quantity=30,
+            days_supply=30,
+            drug_cost=Decimal("100.00"),
+            plan_type=PlanType.COMMERCIAL,
+        )
+        # NDC not in cache - should trigger error
+        ndc_cache = {"98765432109": True}  # Different NDC
+        errors = _validate_format_and_values(claim, validate_ndc_online=True, ndc_cache=ndc_cache)
+        assert "ndc validation not found in cache" in errors
 
     def test_date_of_service_future(self):
         """Test that future date_of_service returns error."""
@@ -498,14 +511,14 @@ class TestValidate:
         ) as mock_format:
 
             # Act
-            errors = validate_claim(fake_claim, validate_ndc_online=True)
+            errors = validate_claim(fake_claim, validate_ndc_online=True, ndc_cache=None)
 
             # Assert
             assert len(errors) == 3
             assert errors == required_field_errors + format_value_errors
 
             mock_required.assert_called_once_with(fake_claim)
-            mock_format.assert_called_once_with(fake_claim, True)
+            mock_format.assert_called_once_with(fake_claim, True, None)
 
     def test_normalize_11_to_fda_product_ndc_strips_leading_zero(self):
         ndc_11 = "01234567890"

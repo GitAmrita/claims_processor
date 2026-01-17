@@ -41,7 +41,7 @@ class TestProcessClaim:
         assert result.copay_amount == Decimal("20.00")
         assert result.rejection_reason is None
         assert isinstance(result.processed_at, datetime)
-        mock_validate.assert_called_once_with(claim)
+        mock_validate.assert_called_once_with(claim, validate_ndc_online=True, ndc_cache=None)
         mock_calculate_copay.assert_called_once_with(claim)
 
     @patch("claims_processor.processor.validate_claim")
@@ -208,6 +208,33 @@ class TestProcessClaim:
 
         # Assert
         assert result.processed_at.tzinfo == timezone.utc
+
+    @patch("claims_processor.processor.calculate_copay")
+    @patch("claims_processor.processor.validate_claim")
+    def test_process_claim_with_ndc_cache(self, mock_validate, mock_calculate_copay):
+        """Test processing claim with NDC cache provided."""
+        # Arrange
+        claim = Claim(
+            claim_id="CLM015",
+            member_id="1234567890",
+            ndc="12345678901",
+            date_of_service=date.today() - timedelta(days=1),
+            quantity=30,
+            days_supply=30,
+            drug_cost=Decimal("100.00"),
+            plan_type=PlanType.COMMERCIAL,
+        )
+        ndc_cache = {"12345678901": True}
+        mock_validate.return_value = []  # No validation errors
+        mock_calculate_copay.return_value = Decimal("20.00")
+
+        # Act
+        result = process_claim(claim, ndc_cache=ndc_cache)
+
+        # Assert
+        assert result.status == Status.APPROVED
+        mock_validate.assert_called_once_with(claim, validate_ndc_online=True, ndc_cache=ndc_cache)
+        mock_calculate_copay.assert_called_once_with(claim)
 
     def test_reject_creates_rejected_processed_claim(self):
         """Test that _reject creates a properly formatted rejected claim."""
