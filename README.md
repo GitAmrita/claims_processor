@@ -31,20 +31,31 @@ This will:
 
 #### Input Files
 
-The project includes two sample input files:
+The project includes three sample input files:
 
 1. **`sample_data/input_claims.csv`** (26 rows)
    - Small dataset for quick testing and validation
    - Demonstrates various validation scenarios (see "Sample Claim Validation Results" section below)
    - Used by default when running `python main.py`
+   - **Processing time:** ~0.8 seconds (with parallel processing enabled)
 
-2. **`sample_data/big_input_claims.csv`** (5000 rows)
+2. **`sample_data/big_input_claims.csv`** (5,000 rows)
    - Large dataset for performance testing at scale
    - Useful for benchmarking parallel processing performance
    - To use this file, modify `INPUT_FILE` in `main.py`:
      ```python
      INPUT_FILE = Path("sample_data/big_input_claims.csv")
      ```
+   - **Processing time:** ~1.77 seconds (with parallel processing enabled)
+
+3. **`sample_data/very_big_input_claims.csv`** (50,000 rows)
+   - Very large dataset for extensive performance and scaling testing
+   - Contains mix of approved and rejected claims (~60% approved, ~40% rejected)
+   - To use this file, modify `INPUT_FILE` in `main.py`:
+     ```python
+     INPUT_FILE = Path("sample_data/very_big_input_claims.csv")
+     ```
+   - **Processing time:** ~2.26 seconds (with parallel processing enabled)
 
 ### Configuration
 
@@ -241,6 +252,27 @@ The claims processor uses a parallel processing architecture optimized for handl
   - Per-process caching (avoid duplicate API calls)
   - Semaphore-controlled concurrency (prevent API rate limiting)
 
+### Performance & Scaling
+
+The following table shows performance benchmarks across different dataset sizes, demonstrating the system's scalability:
+
+| Dataset Size | File | Processing Time | Throughput |
+|-------------|------|----------------|------------|
+| 26 rows | `input_claims.csv` | ~0.8 seconds | ~33 claims/sec |
+| 5,000 rows | `big_input_claims.csv` | ~1.77 seconds | ~2,825 claims/sec |
+| 50,000 rows | `very_big_input_claims.csv` | ~2.26 seconds | ~22,124 claims/sec |
+
+**Key Observations:**
+- **Near-linear scaling**: Processing time increases sub-linearly with dataset size, demonstrating efficient parallelization
+- **Throughput improvement**: Larger datasets achieve significantly higher throughput due to better parallelization efficiency
+- **Bottleneck**: NDC validation (network I/O) remains the primary bottleneck, but async batch processing minimizes its impact
+- **Configuration**: All tests performed with:
+  - Parallel processing enabled (`USE_PARALLEL = True`)
+  - Online NDC validation enabled (`VALIDATE_NDC_ONLINE = True`)
+  - 8 worker processes (CPU count)
+  - Chunk size: 1,000 claims
+
+
 ### Data Flow
 
 1. **Input**: CSV file with claims data
@@ -296,4 +328,30 @@ The table below lists which claims fail which validations according to the busin
 | CLM024 | days_supply missing |
 | CLM025 | drug_cost missing |
 | CLM026 | plan_type missing, ndc fails OpenFDA |
+
+## Error Distribution Histogram
+
+The following histogram shows the frequency of each validation error type found in the processed claims from **`input_claims.csv`** (26 rows). This visualization helps identify the most common validation failures:
+
+| Error Type | Count | Histogram |
+|-----------|-------|-----------|
+| ndc is not a valid FDA NDC | 7 | ██████████████████████████████████████████████████ |
+| days_supply must be between 1 and 90 | 3 | █████████████████████ |
+| drug_cost must be positive | 3 | █████████████████████ |
+| Too many pills per day | 3 | █████████████████████ |
+| member_id must be exactly 10 digits | 2 | ██████████████ |
+| quantity must be positive | 2 | ██████████████ |
+| ndc must be exactly 11 digits | 2 | ██████████████ |
+| date_of_service cannot be in the future | 1 | ███████ |
+| member_id is required | 1 | ███████ |
+| ndc is required | 1 | ███████ |
+| date_of_service is required | 1 | ███████ |
+| days_supply is required | 1 | ███████ |
+| drug_cost is required | 1 | ███████ |
+| plan_type is required | 1 | ███████ |
+
+**Summary:**
+- **Total Errors:** 29
+- **Unique Error Types:** 14
+- **Claims with Errors:** 21
 

@@ -207,7 +207,6 @@ marimo/_lsp/
 __marimo__/
 
 # Project-specific generated files
-sample_data/output*.json
 *.output.json
 
 # macOS

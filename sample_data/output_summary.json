@@ -1,0 +1,8 @@
+{
+  "total_rows_processed": 26,
+  "total_approved": 5,
+  "total_rejected": 21,
+  "percentage_approved": 19.23,
+  "percentage_rejected": 80.77,
+  "processing_time_seconds": 0.78
+}
